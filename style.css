@@ -1,0 +1,506 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #080a16;
+  color: #f4e9f7;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+canvas#game {
+  display: block;
+  width: 100%; height: 100%;
+  image-rendering: pixelated;
+  cursor: default;
+}
+
+#err {
+  display: none;
+  position: fixed;
+  left: 12px; right: 12px; top: 12px;
+  z-index: 999;
+  padding: 12px 16px;
+  background: #4a0d1d;
+  border: 2px solid #ff5d8f;
+  border-radius: 8px;
+  font: 13px/1.4 monospace;
+  white-space: pre-wrap;
+}
+
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+/* ── hearts ─────────────────────────────── */
+#hearts {
+  position: absolute; left: 18px; top: 14px;
+  display: flex; gap: 2px;
+  font-size: 26px; line-height: 1;
+  filter: drop-shadow(0 2px 0 #0008);
+}
+.heart { color: #3b2a46; text-shadow: 0 0 0 #000; transition: color .15s, transform .15s; }
+.heart.on { color: #ff5d8f; text-shadow: 0 0 10px #ff2f70aa; }
+.heart.on:nth-child(odd) { transform: translateY(-1px); }
+
+/* ── clock ──────────────────────────────── */
+#clock {
+  position: absolute; right: 18px; top: 14px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  background: rgba(18, 12, 26, .82);
+  border: 2px solid #7a4d86;
+  border-radius: 10px;
+  box-shadow: 0 0 0 2px #241a2e, 0 6px 18px #0008;
+  font-size: 14px; font-weight: 700; letter-spacing: .3px;
+  color: #f3d9f8;
+}
+#clock-icon { font-size: 17px; color: #ffd86b; }
+
+/* ── toast ──────────────────────────────── */
+#toast {
+  position: absolute; left: 50%; bottom: 150px;
+  transform: translateX(-50%) translateY(8px);
+  padding: 9px 18px;
+  background: rgba(24, 16, 32, .92);
+  border: 2px solid #a855c0;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 700;
+  opacity: 0; transition: opacity .2s, transform .2s;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── hint ───────────────────────────────── */
+#hint {
+  position: absolute; left: 50%; bottom: 100px;
+  transform: translateX(-50%);
+  padding: 9px 16px;
+  background: rgba(14, 10, 22, .78);
+  border: 2px solid #563a66;
+  border-radius: 10px;
+  font-size: 13px; color: #d9c6e2;
+  white-space: nowrap;
+  transition: opacity .8s;
+  max-width: 94vw; overflow: hidden; text-overflow: ellipsis;
+}
+#hint b { color: #ffb3d5; }
+#hint.fade { opacity: 0; }
+
+/* ── hotbar ─────────────────────────────── */
+#hotbar {
+  position: absolute; left: 50%; bottom: 18px;
+  transform: translateX(-50%);
+  display: flex; gap: 5px;
+  padding: 8px;
+  background: rgba(16, 12, 24, .88);
+  border: 3px solid #c06aa0;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px #241a2e, 0 10px 28px #000a, 0 0 24px #ff5d8f22;
+  pointer-events: auto;
+}
+.slot {
+  position: relative;
+  width: 54px; height: 54px;
+  background: #241b2f;
+  border: 2px solid #4a3559;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.slot:hover { border-color: #8a5d9e; }
+.slot.sel {
+  border-color: #ffb3d5;
+  background: #3a2a47;
+  box-shadow: 0 0 14px #ff7ab8aa, inset 0 0 10px #ff7ab833;
+}
+.slot canvas {
+  position: absolute; left: 50%; top: 50%;
+  width: 38px; height: 38px;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.slot.dim canvas { opacity: .3; }
+.slot .count {
+  position: absolute; right: 4px; top: 1px;
+  font-size: 13px; font-weight: 800;
+  color: #fff; text-shadow: 1px 1px 0 #000, 0 0 4px #000;
+  pointer-events: none;
+}
+.slot .num {
+  position: absolute; left: 4px; top: 1px;
+  font-size: 10px; font-weight: 700;
+  color: #b9a5c9; pointer-events: none;
+}
+
+/* ── panels ─────────────────────────────── */
+.panel {
+  position: fixed; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  width: min(560px, 92vw);
+  max-height: 82vh; overflow: auto;
+  padding: 22px 24px;
+  background: linear-gradient(180deg, rgba(30, 21, 40, .98), rgba(16, 12, 24, .98));
+  border: 3px solid #c06aa0;
+  border-radius: 16px;
+  box-shadow: 0 0 0 3px #241a2e, 0 24px 80px #000c, 0 0 60px #ff5d8f22;
+}
+.panel.hidden { display: none; }
+.panel h1 { font-size: 30px; letter-spacing: .5px; color: #ffd0e6; margin-bottom: 4px; }
+.panel h2 { font-size: 22px; color: #ffd0e6; margin-bottom: 14px; }
+.panel .sub { font-size: 13px; color: #a98fb8; font-weight: 400; }
+
+.btn {
+  display: block; width: 100%;
+  margin-top: 10px; padding: 12px 16px;
+  background: linear-gradient(180deg, #a94f86, #7a3562);
+  border: 2px solid #ff9fcb;
+  border-radius: 10px;
+  color: #fff; font: 700 15px "Trebuchet MS", sans-serif;
+  cursor: pointer;
+  box-shadow: 0 4px 0 #4a1e3a, 0 8px 18px #0007;
+  transition: transform .08s, filter .12s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #4a1e3a; }
+.btn.danger { background: linear-gradient(180deg, #8f2f45, #5f1a2c); border-color: #ff8fa8; box-shadow: 0 4px 0 #3a0d19, 0 8px 18px #0007; }
+.btn.small { width: auto; margin: 0; padding: 8px 14px; font-size: 13px; }
+.btn:disabled { opacity: .35; cursor: not-allowed; filter: grayscale(.6); }
+
+.controls {
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid #4a3559;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+  font-size: 13px; color: #c9b6d6;
+}
+.controls b { color: #ffb3d5; }
+
+/* ── crafting ───────────────────────────── */
+.recipe {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #241b2f;
+  border: 2px solid #4a3559;
+  border-radius: 10px;
+}
+.recipe canvas {
+  width: 40px; height: 40px; image-rendering: pixelated;
+  background: #1a1322; border-radius: 6px; padding: 4px;
+  flex: none;
+}
+.recipe .info { flex: 1; min-width: 0; }
+.recipe .name { font-weight: 800; color: #ffd0e6; font-size: 14px; }
+.recipe .ing { font-size: 12px; color: #b39cc4; }
+.recipe .btn { flex: none; }
+
+/* ── inventory ──────────────────────────── */
+#inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 8px;
+}
+.inv-item {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 6px 8px;
+  background: #241b2f;
+  border: 2px solid #4a3559;
+  border-radius: 10px;
+  color: #e9d9f0;
+  font: 700 12px "Trebuchet MS", sans-serif;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s, transform .08s;
+}
+.inv-item:hover {
+  border-color: #ffb3d5;
+  box-shadow: 0 0 12px #ff7ab855;
+  transform: translateY(-1px);
+}
+.inv-item canvas {
+  width: 34px; height: 34px;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.inv-item .nm { font-weight: 700; font-size: 11px; text-align: center; line-height: 1.1; }
+.inv-item .cnt {
+  position: absolute; right: 5px; top: 4px;
+  padding: 0 4px;
+  background: #120c1a;
+  border-radius: 5px;
+  font-size: 11px; color: #ffd0e6;
+}
+#inv-grid .empty { color: #a98fb8; font-size: 14px; grid-column: 1 / -1; text-align: center; padding: 18px; }
+
+/* ── crafting table ─────────────────────── */
+.panel.wide { width: min(820px, 95vw); }
+.craft-wrap { display: flex; gap: 16px; align-items: flex-start; }
+.craft-left { display: flex; align-items: center; gap: 10px; flex: none; }
+.craft-grid { display: grid; grid-template-columns: repeat(3, 58px); gap: 6px; }
+.craft-cell {
+  position: relative; width: 58px; height: 58px;
+  background: #241b2f;
+  border: 2px solid #4a3559;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s;
+}
+.craft-cell:hover { border-color: #ffb3d5; }
+.craft-cell canvas { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; transform: translate(-50%,-50%); image-rendering: pixelated; pointer-events: none; }
+.craft-arrow { font-size: 26px; color: #ff9fcb; text-shadow: 0 2px 0 #4a1e3a; }
+.craft-result {
+  position: relative; width: 74px; height: 74px;
+  background: #2b2038;
+  border: 3px solid #7a4d86;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: inset 0 0 14px #0006;
+}
+.craft-result:hover:not(:disabled) { border-color: #ffb3d5; box-shadow: 0 0 16px #ff7ab877, inset 0 0 14px #0006; }
+.craft-result:disabled { opacity: .45; cursor: not-allowed; }
+.craft-result canvas { width: 52px; height: 52px; image-rendering: pixelated; }
+.craft-book { flex: 1; min-width: 0; max-height: 300px; overflow: auto; padding-right: 4px; }
+.recipe {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; margin-bottom: 6px;
+  background: #241b2f; border: 2px solid #4a3559; border-radius: 9px;
+  cursor: pointer;
+}
+.recipe:hover { border-color: #8a5d9e; }
+.recipe.off { opacity: .5; }
+.recipe canvas { width: 32px; height: 32px; image-rendering: pixelated; flex: none; }
+.recipe .info { flex: 1; min-width: 0; }
+.recipe .name { font-weight: 800; font-size: 12px; color: #ffd0e6; }
+.recipe .ing { font-size: 11px; color: #b39cc4; }
+.craft-inv-title { margin: 14px 0 6px; font-size: 13px; color: #c9b6d6; font-weight: 700; }
+.craft-inv {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px; max-height: 170px; overflow: auto;
+}
+.craft-item {
+  position: relative; display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  background: #241b2f; border: 2px solid #4a3559; border-radius: 8px;
+  color: #e9d9f0; font: 700 11px "Trebuchet MS", sans-serif;
+  cursor: pointer;
+}
+.craft-item:hover { border-color: #ffb3d5; }
+.craft-item canvas { width: 26px; height: 26px; image-rendering: pixelated; flex: none; }
+.craft-item .cnt { color: #ffd0e6; font-size: 11px; }
+
+/* ── hunger & durability ────────────────── */
+#hunger {
+  position: absolute; left: 18px; top: 46px;
+  width: 200px; height: 22px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 0 #0008);
+}
+.slot .dur {
+  position: absolute; left: 6px; right: 6px; bottom: 4px;
+  height: 3px; background: #120c1a; border-radius: 2px;
+  overflow: hidden; display: none;
+}
+.slot .dur i { display: block; height: 100%; width: 100%; background: #5be36f; }
+.craft-result .cnt {
+  position: absolute; right: 4px; bottom: 2px;
+  font-size: 13px; font-weight: 800; color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+.craft-result { display: flex; align-items: center; justify-content: center; }
+
+/* ── title screen ───────────────────────── */
+.screen {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.screen.hidden { display: none; }
+.screen-bg {
+  position: absolute; inset: -10px;
+  background: #1a1426 url('bg.jpg') center / cover no-repeat;
+  filter: saturate(.85) brightness(.6) blur(1px);
+  transform: scale(1.04);
+}
+.screen::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(20,10,30,.1) 0%, rgba(8,4,14,.78) 68%, rgba(6,3,10,.96) 100%),
+    linear-gradient(180deg, rgba(10,5,18,.35), rgba(10,5,18,.82));
+}
+.title-inner { position: relative; z-index: 2; text-align: center; padding: 24px; }
+.logo { display: flex; flex-direction: column; align-items: center; line-height: .9; }
+.logo-a {
+  font-family: "Arial Black", "Trebuchet MS", sans-serif;
+  font-size: clamp(46px, 8.5vw, 104px);
+  font-weight: 900; letter-spacing: .06em;
+  color: #ffe6f3;
+  text-shadow:
+    0 3px 0 #7b2c52, 0 6px 0 #521a38, 0 9px 0 #2c0c1f,
+    0 0 38px rgba(255, 93, 143, .55);
+}
+.logo-c {
+  font-family: "Arial Black", "Trebuchet MS", sans-serif;
+  font-size: clamp(18px, 2.6vw, 30px);
+  font-weight: 900; letter-spacing: .62em;
+  color: #ffb3d5; margin-top: 14px;
+  text-shadow: 0 2px 0 #521a38, 0 0 18px rgba(255, 93, 143, .7);
+}
+.splash {
+  display: inline-block;
+  margin: 20px auto 0;
+  transform: rotate(-7deg);
+  color: #ffe066;
+  font-weight: 900; font-size: clamp(14px, 1.8vw, 20px);
+  text-shadow: 0 2px 0 #6b4a00, 0 0 14px #ffcc0088;
+  animation: splashPulse 1.6s ease-in-out infinite alternate;
+}
+@keyframes splashPulse { from { transform: rotate(-7deg) scale(1); } to { transform: rotate(-7deg) scale(1.06); } }
+.title-buttons {
+  display: flex; flex-direction: column; gap: 10px;
+  width: min(330px, 78vw); margin: 30px auto 0;
+}
+.btn.big { font-size: 19px; padding: 15px 18px; letter-spacing: .5px; }
+.title-foot { margin-top: 26px; color: #b9a5c9; font-size: 12px; text-shadow: 0 1px 0 #000; }
+
+/* ── fields ─────────────────────────────── */
+.field {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 12px 0; font-size: 14px; font-weight: 700; color: #d9c6e2;
+}
+.field input[type=text], .field select {
+  flex: 1; min-width: 0;
+  padding: 9px 10px;
+  background: #1a1322; color: #f4e9f7;
+  border: 2px solid #4a3559; border-radius: 8px;
+  font: 700 14px "Trebuchet MS", sans-serif;
+  outline: none;
+}
+.field input[type=text]:focus, .field select:focus { border-color: #ff9fcb; }
+.field input[type=range] { flex: 1; accent-color: #ff5d8f; }
+
+/* ── furnace / chest ────────────────────── */
+#furnace-panel .smelt-row { cursor: default; }
+#furnace-panel .arrow { color: #ff9fcb; font-weight: 900; }
+#chest-panel .craft-grid { display: grid; grid-template-columns: repeat(3, 58px); gap: 6px; justify-content: center; margin-bottom: 8px; }
+body { background: #080a16 url('bg.jpg') center / cover fixed no-repeat; }
+
+#hud.hidden { display: none; }
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #ffb3d5 50%),
+    linear-gradient(135deg, #ffb3d5 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+  cursor: pointer;
+}
+.field select option { background: #1a1322; color: #f4e9f7; }
+
+/* ── loading screen ─────────────────────── */
+#loading { z-index: 120; background: #241a12; }
+#loading.hidden { display: none; }
+.loading-bg {
+  position: absolute; inset: 0;
+  background-color: #2b1e14;
+  background-size: 112px 112px;
+  image-rendering: pixelated;
+  opacity: .95;
+}
+#loading::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(12,8,18,.02) 0%, rgba(10,6,14,.45) 62%, rgba(10,6,14,.88) 100%);
+}
+.loading-inner {
+  position: relative; z-index: 2;
+  width: min(520px, 90vw);
+  padding: 28px 30px;
+  background: rgba(16, 11, 24, .82);
+  border: 3px solid #7a4d86;
+  border-radius: 16px;
+  box-shadow: 0 0 0 3px #241a2e, 0 20px 70px #000b;
+  text-align: center;
+}
+.loading-logo {
+  font: 900 clamp(28px, 4vw, 44px) "Arial Black", "Trebuchet MS", sans-serif;
+  letter-spacing: .07em; color: #ffe6f3;
+  text-shadow: 0 3px 0 #7b2c52, 0 0 26px rgba(255, 93, 143, .5);
+  line-height: .9;
+}
+.loading-logo span {
+  display: block; margin-top: 8px;
+  font-size: .4em; letter-spacing: .55em; color: #ffb3d5;
+  text-shadow: 0 2px 0 #521a38;
+}
+.loading-sub { margin: 22px 0 10px; color: #e8d6ef; font-weight: 700; font-size: 15px; }
+.loading-bar {
+  height: 20px; padding: 2px;
+  background: #1a1010;
+  border: 2px solid #6b4a2b; border-radius: 5px;
+  box-shadow: 0 2px 0 #0008;
+}
+.loading-bar i {
+  display: block; height: 100%; width: 0%;
+  background: linear-gradient(90deg, #4ec95b, #9be36f);
+  border-radius: 2px;
+  transition: width .18s linear;
+  box-shadow: inset 0 0 8px #ffffff33;
+}
+.loading-meta {
+  display: flex; justify-content: space-between;
+  margin-top: 8px; color: #c9b6d6; font-size: 12px; font-weight: 700;
+}
+.loading-tip {
+  margin-top: 24px; color: #ffe066; font-weight: 700; font-size: 13px;
+  text-shadow: 0 2px 0 #4a2f00;
+}
+
+/* ── creative badge / inventory tabs ────── */
+#mode-badge {
+  position: absolute; left: 50%; top: 12px;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  background: rgba(255, 93, 143, .16);
+  border: 2px solid #ff7ab8;
+  border-radius: 9px;
+  color: #ffd0e6; font-size: 12px; font-weight: 800; letter-spacing: .6px;
+  text-shadow: 0 1px 0 #000;
+  box-shadow: 0 0 18px #ff5d8f44;
+}
+#mode-badge.hidden { display: none; }
+.inv-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.inv-tabs button {
+  padding: 6px 10px;
+  background: #241b2f; color: #d9c6e2;
+  border: 2px solid #4a3559; border-radius: 8px;
+  font: 700 12px "Trebuchet MS", sans-serif;
+  cursor: pointer;
+}
+.inv-tabs button.on { background: #5a2a44; border-color: #ffb3d5; color: #fff; }
+.inv-tabs button:hover { border-color: #8a5d9e; }
+#inv-search {
+  width: 100%; margin-bottom: 10px; padding: 9px 10px;
+  background: #1a1322; color: #f4e9f7;
+  border: 2px solid #4a3559; border-radius: 8px;
+  font: 700 13px "Trebuchet MS", sans-serif;
+  outline: none;
+}
+#inv-search:focus { border-color: #ff9fcb; }
+
+/* анимация загрузки: не блокирует игру и не зависит от таймеров */
+.loading-bar i.run { animation: loadFill 1.15s linear forwards; }
+@keyframes loadFill { from { width: 0%; } to { width: 100%; } }
+#loading.run { animation: loadFade .38s ease 1.2s forwards; }
+@keyframes loadFade { to { opacity: 0; visibility: hidden; } }
+.loading-skip { margin-top: 12px; color: #b9a5c9; font-size: 11px; }
+
+.loading-skip-btn { width: auto; margin: 12px auto 0; }
+
+.title-3d { display:inline-block; margin-top:18px; color:#ffb3d5; font-weight:800; font-size:14px; text-decoration:none; border-bottom:1px dashed #ffb3d5; }
+.title-3d:hover { color:#ffe066; }

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avirbeta Craft</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="stylesheet" href="style.css?v=20">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="title" class="screen">
+  <div class="screen-bg"></div>
+  <div class="title-inner">
+    <div class="logo"><span class="logo-a">AVIRBETA</span><span class="logo-c">CRAFT</span></div>
+    <div class="splash" id="splash">100% без Mojang!</div>
+    <div class="title-buttons">
+      <button class="btn big" id="btn-play">Играть</button>
+      <button class="btn" id="btn-new">Новый мир</button>
+      <button class="btn" id="btn-settings">Настройки</button>
+      <button class="btn" id="btn-about">Об игре</button>
+    </div>
+    <div class="title-foot">AVIRBETA · v1.0.5 · не связано с Mojang</div>
+  </div>
+</div>
+
+<div id="loading" class="screen hidden">
+  <div class="loading-bg" id="loading-bg"></div>
+  <div class="loading-inner">
+    <div class="loading-logo">AVIRBETA <span>CRAFT</span></div>
+    <div class="loading-sub" id="loading-sub">Загрузка мира…</div>
+    <div class="loading-bar"><i id="loading-fill"></i></div>
+    <div class="loading-meta"><span id="loading-percent">0%</span><span id="loading-step">Подготовка</span></div>
+    <div class="loading-tip" id="loading-tip">Совет: …</div>
+    <div class="loading-skip">клик или любая клавиша — пропустить</div>
+    <button class="btn small loading-skip-btn" id="loading-skip">Пропустить</button>
+  </div>
+</div>
+
+<div id="err"></div>
+
+<div id="hud">
+  <div id="mode-badge" class="hidden">ТВОРЧЕСКИЙ РЕЖИМ</div>
+  <div id="hearts"></div>
+  <canvas id="hunger" width="200" height="22"></canvas>
+  <div id="clock"><span id="clock-icon">☀</span><span id="clock-text">День 1 · 06:00</span></div>
+  <div id="toast"></div>
+  <div id="hint">
+    <b>WASD</b> — ходить · <b>Пробел</b> — прыжок · <b>ЛКМ</b> — копать / бить ·
+    <b>ПКМ</b> — ставить · <b>1–9 / колесо</b> — слот · <b>E</b> — крафт · <b>I</b> — инвентарь · <b>Esc</b> — пауза
+  </div>
+  <div id="hotbar"></div>
+</div>
+
+<div id="craft" class="panel wide hidden">
+  <h2>Верстак <span class="sub">(E — закрыть)</span></h2>
+  <div class="craft-wrap">
+    <div class="craft-left">
+      <div id="craft-grid" class="craft-grid"></div>
+      <div class="craft-arrow">➜</div>
+      <button id="craft-result" class="craft-result" title="Создать"></button>
+    </div>
+    <div id="craft-book" class="craft-book"></div>
+  </div>
+  <div class="craft-inv-title">Инвентарь <span class="sub">клик — положить в сетку</span></div>
+  <div id="craft-inv" class="craft-inv"></div>
+</div>
+
+<div id="inventory" class="panel hidden">
+  <h2>Инвентарь <span class="sub">(I — закрыть) · клик — в слот <b id="inv-slot">1</b></span></h2>
+  <div class="inv-tabs" id="inv-tabs">
+    <button data-cat="all" class="on">Все</button>
+    <button data-cat="blocks">Блоки</button>
+    <button data-cat="tools">Инструменты</button>
+    <button data-cat="food">Еда</button>
+    <button data-cat="materials">Материалы</button>
+    <button data-cat="eggs">Яйца</button>
+  </div>
+  <input id="inv-search" type="text" placeholder="Поиск предмета…">
+  <div id="inv-grid"></div>
+</div>
+
+<div id="pause" class="panel hidden">
+  <h1>AVIRBETA CRAFT</h1>
+  <p class="sub">Долина · <span id="pause-mode">выживание</span></p>
+  <button class="btn" id="resume">Продолжить</button>
+  <button class="btn" id="save">Сохранить</button>
+  <button class="btn" id="pause-settings">Настройки</button>
+  <button class="btn" id="toggle-mode">Включить творческий режим</button>
+  <button class="btn" id="to-menu">В меню</button>
+  <button class="btn danger" id="newworld">Новый мир</button>
+  <div class="controls">
+    <div><b>WASD</b> — движение</div>
+    <div><b>Пробел</b> — прыжок / плыть</div>
+    <div><b>ЛКМ</b> — копать блок, бить моба</div>
+    <div><b>ПКМ</b> — поставить блок / открыть</div>
+    <div><b>1–9</b> или колесо — выбрать слот</div>
+    <div><b>E</b> — верстак</div>
+    <div><b>I</b> — инвентарь</div>
+    <div><b>Esc</b> — пауза</div>
+  </div>
+</div>
+
+<div id="furnace-panel" class="panel hidden">
+  <h2>Печь <span class="sub">(Esc — закрыть)</span></h2>
+  <div class="craft-book" id="smelt-list"></div>
+</div>
+
+<div id="chest-panel" class="panel hidden">
+  <h2>Сундук <span class="sub">(Esc — закрыть) · клик — взять/положить</span></h2>
+  <div class="craft-grid" id="chest-grid"></div>
+  <div class="craft-inv-title">Инвентарь</div>
+  <div class="craft-inv" id="chest-inv"></div>
+</div>
+
+<div id="newworld-panel" class="panel hidden">
+  <h2>Новый мир</h2>
+  <label class="field">Сид <input id="seed-input" type="text" placeholder="случайный"></label>
+  <label class="field">Режим
+    <select id="mode-select">
+      <option value="survival">Выживание</option>
+      <option value="creative">Творческий</option>
+    </select>
+  </label>
+  <label class="field">Сложность
+    <select id="diff-select">
+      <option value="peaceful">Мирная</option>
+      <option value="normal" selected>Обычная</option>
+      <option value="hard">Сложная</option>
+    </select>
+  </label>
+  <button class="btn" id="create-world">Создать мир</button>
+  <button class="btn small" id="newworld-back">Назад</button>
+</div>
+
+<div id="settings-panel" class="panel hidden">
+  <h2>Настройки</h2>
+  <label class="field">Громкость <input id="vol" type="range" min="0" max="100" value="60"></label>
+  <button class="btn" id="fullscreen">Полный экран</button>
+  <button class="btn danger" id="reset-save">Удалить сохранение</button>
+  <div class="controls">
+    <div><b>WASD</b> — движение</div>
+    <div><b>Пробел</b> — прыжок</div>
+    <div><b>ЛКМ</b> — копать / бить</div>
+    <div><b>ПКМ</b> — ставить / открыть</div>
+    <div><b>E</b> — верстак</div>
+    <div><b>I</b> — инвентарь</div>
+    <div><b>1–9</b> — слот</div>
+    <div><b>Esc</b> — пауза</div>
+  </div>
+  <button class="btn small" id="settings-back">Назад</button>
+</div>
+
+<div id="about-panel" class="panel hidden">
+  <h2>Об игре</h2>
+  <p style="line-height:1.6;color:#d9c6e2">
+    <b>AVIRBETA CRAFT</b> — независимая 2D-песочница на чистом Canvas:
+    процедурные миры, биомы, пещеры, руды, инструменты, крафт, печь,
+    мобы и смена дня и ночи.
+  </p>
+  <p style="margin-top:12px;line-height:1.6;color:#b39cc4">
+    Бренд <b>AVIRBETA</b>. Игра не связана с Mojang или Microsoft.
+    Названия «Minecraft» и «Mojang» не используются как бренд проекта.
+  </p>
+  <p class="sub" style="margin-top:12px">Версия 1.0 · работает офлайн в браузере</p>
+  <button class="btn small" id="about-back">Назад</button>
+</div>
+
+<script>
+window.addEventListener('error', (e) => {
+  const box = document.getElementById('err');
+  box.style.display = 'block';
+  box.textContent = 'Ошибка: ' + (e.message || e.error) + ' — ' + (e.filename || '') + ':' + (e.lineno || '');
+});
+</script>
+<script src="game.js?v=20"></script>
+</body>
+</html>

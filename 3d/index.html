@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Avirbeta 3D</title>
+<link rel="icon" type="image/png" href="../favicon.png">
+<link rel="stylesheet" href="style3d.css">
+</head>
+<body>
+<div id="game3d"></div>
+
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="hearts"></div>
+  <canvas id="hunger" width="200" height="22"></canvas>
+  <div id="clock"><span id="clock-icon">☀</span><span id="clock-text">День 1 · 12:00</span></div>
+  <div id="target-name"></div>
+  <div id="toast"></div>
+  <div id="hotbar"></div>
+</div>
+
+<div id="title" class="screen">
+  <div class="screen-bg"></div>
+  <div class="title-inner">
+    <div class="logo"><span class="logo-a">AVIRBETA</span><span class="logo-c">3D</span></div>
+    <div class="splash">Теперь по-настоящему объёмно!</div>
+    <div class="title-buttons">
+      <label class="field">Режим
+        <select id="mode-select">
+          <option value="survival" selected>Выживание</option>
+          <option value="creative">Творческий</option>
+        </select>
+      </label>
+      <button class="btn big" id="btn-play">Играть</button>
+      <button class="btn" id="btn-new">Новый мир</button>
+      <a class="btn link" href="../?v=20">2D-версия</a>
+    </div>
+    <div class="title-foot">
+      WASD — ходьба · мышь — обзор · ЛКМ — копать · ПКМ — ставить ·
+      пробел — прыжок · E — инвентарь · Esc — пауза
+    </div>
+    <div class="title-brand">AVIRBETA · не связано с Mojang</div>
+  </div>
+</div>
+
+<div id="loading" class="screen hidden">
+  <div class="loading-bg"></div>
+  <div class="loading-inner">
+    <div class="loading-logo">AVIRBETA <span>3D</span></div>
+    <div class="loading-sub" id="loading-sub">Генерация мира…</div>
+    <div class="loading-bar"><i id="loading-fill"></i></div>
+    <div class="loading-tip">Клик или любая клавиша — пропустить</div>
+  </div>
+</div>
+
+<div id="lock" class="screen hidden">
+  <div class="lock-card">
+    <div class="lock-title">AVIRBETA 3D</div>
+    <div class="lock-text">Нажми, чтобы захватить мышь</div>
+    <div class="lock-sub">WASD — ходьба · пробел — прыжок · ЛКМ — копать · ПКМ — ставить</div>
+  </div>
+</div>
+
+<div id="pause" class="panel hidden">
+  <h1>AVIRBETA 3D</h1>
+  <p class="sub">Мир · <span id="pause-mode">выживание</span></p>
+  <button class="btn" id="resume">Продолжить</button>
+  <button class="btn" id="save">Сохранить</button>
+  <button class="btn" id="toggle-mode">Включить творческий режим</button>
+  <button class="btn danger" id="new-world">Новый мир</button>
+  <a class="btn link" href="../?v=20">2D-версия</a>
+  <div class="controls">
+    <div><b>WASD</b> — движение</div>
+    <div><b>Мышь</b> — обзор</div>
+    <div><b>Пробел</b> — прыжок / плыть</div>
+    <div><b>ЛКМ</b> — копать</div>
+    <div><b>ПКМ</b> — ставить / есть</div>
+    <div><b>1–9 / колесо</b> — слот</div>
+    <div><b>E</b> — инвентарь</div>
+    <div><b>Esc</b> — пауза</div>
+  </div>
+</div>
+
+<div id="inventory" class="panel hidden">
+  <h2>Инвентарь <span class="sub">(E — закрыть) · клик — в слот <b id="inv-slot">1</b></span></h2>
+  <div id="inv-grid" class="inv-grid"></div>
+</div>
+
+<div id="err"></div>
+
+<script>
+window.addEventListener('error', (e) => {
+  const box = document.getElementById('err');
+  box.style.display = 'block';
+  box.textContent = 'Ошибка: ' + (e.message || e.error) + ' — ' + (e.filename || '') + ':' + (e.lineno || '');
+});
+</script>
+<script type="module" src="game3d.js"></script>
+</body>
+</html>
