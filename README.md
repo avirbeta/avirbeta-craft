@@ -6,6 +6,11 @@
 > Проект не связан с Mojang или Microsoft. «Minecraft» и «Mojang» не используются
 > как бренд проекта.
 
+## Играть онлайн
+
+- **2D:** https://avirbeta.github.io/avirbeta-craft/
+- **3D:** https://avirbeta.github.io/avirbeta-craft/3d/
+
 ## Что внутри
 
 ### 2D-версия (корень)
