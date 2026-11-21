@@ -6,6 +6,7 @@ import * as THREE from './three.module.js';
 
 /* ── helpers ─────────────────────────────────────────────── */
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const isFiniteNumber = v => typeof v === 'number' && Number.isFinite(v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const TAU = Math.PI * 2;
 
@@ -588,6 +589,34 @@ function respawn() {
   toast('Ты возродился у места старта');
 }
 
+function ensurePlayerSafe() {
+  if (
+    !isFiniteNumber(player.x) || !isFiniteNumber(player.y) || !isFiniteNumber(player.z) ||
+    player.x < 0 || player.x > WX || player.z < 0 || player.z > WZ ||
+    player.y < 0 || player.y > WY
+  ) {
+    player.x = spawn.x; player.y = spawn.y; player.z = spawn.z;
+  }
+  player.x = clamp(player.x, 0.01, WX - 0.01);
+  player.z = clamp(player.z, 0.01, WZ - 0.01);
+  player.y = clamp(player.y, 0.01, WY - PH - 0.01);
+
+  if (collides(player.x, player.y, player.z)) {
+    let placed = false;
+    for (let y = Math.max(1, Math.floor(player.y)); y < WY - PH; y++) {
+      if (!collides(player.x, y, player.z)) {
+        player.y = y;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      player.x = spawn.x; player.y = spawn.y; player.z = spawn.z;
+    }
+  }
+  player.vx = player.vy = player.vz = 0;
+}
+
 function hurt(dmg) {
   if (player.mode === 'creative' || player.hurtCd > 0) return;
   player.health = Math.max(0, player.health - dmg);
@@ -1005,6 +1034,7 @@ function closeInventory() {
 
 /* ── pointer lock / pause ────────────────────────────────── */
 let started = false, paused = true, uiOpen = false, quickplay = false;
+let saveAcc = 0;
 
 function requestLock() {
   try { canvas.requestPointerLock(); } catch (e) {}
@@ -1043,7 +1073,10 @@ document.getElementById('resume').addEventListener('click', () => {
   paused = false;
   requestLock();
 });
-document.getElementById('save').addEventListener('click', () => { saveGame(); toast('Мир сохранён'); });
+document.getElementById('save').addEventListener('click', () => {
+  if (saveGame()) toast('Мир сохранён');
+  else toast('Не удалось сохранить: хранилище переполнено');
+});
 document.getElementById('toggle-mode').addEventListener('click', () => {
   player.mode = player.mode === 'creative' ? 'survival' : 'creative';
   player.flying = false;
@@ -1053,7 +1086,7 @@ document.getElementById('toggle-mode').addEventListener('click', () => {
 });
 document.getElementById('new-world').addEventListener('click', () => {
   if (!confirm('Создать новый мир?')) return;
-  localStorage.removeItem(worldKey);
+  try { localStorage.removeItem(worldKey); } catch (e) {}
   beginGame(false, document.getElementById('mode-select').value);
 });
 document.getElementById('mode-select').addEventListener('change', () => {});
@@ -1099,7 +1132,8 @@ function saveGame() {
       time: dayTime, day: dayCount
     };
     localStorage.setItem(worldKey, JSON.stringify(data));
-  } catch (e) { console.error(e); }
+    return true;
+  } catch (e) { console.error(e); return false; }
 }
 
 function loadGame() {
@@ -1118,7 +1152,7 @@ function loadGame() {
     if (q !== w.length) return false;
     for (let k = 0; k < w.length; k++) if (w[k] !== AIR && !isBlock(w[k])) return false;
     world = w;
-    worldSeed = d.seed || 1;
+    worldSeed = isFiniteNumber(d.seed) ? (d.seed >>> 0) : 1;
     heightMap = new Int16Array(WX * WZ);
     for (let x = 0; x < WX; x++) {
       for (let z = 0; z < WZ; z++) {
@@ -1127,21 +1161,45 @@ function loadGame() {
         heightMap[x + z * WX] = y;
       }
     }
-    player.x = d.px; player.y = d.py; player.z = d.pz;
-    player.yaw = d.yaw || 0; player.pitch = d.pitch || 0;
-    player.health = clamp(d.health ?? 20, 0, 20);
-    player.hunger = clamp(d.hunger ?? 20, 0, 20);
+    player.x = isFiniteNumber(d.px) ? d.px : spawn.x;
+    player.y = isFiniteNumber(d.py) ? d.py : spawn.y;
+    player.z = isFiniteNumber(d.pz) ? d.pz : spawn.z;
+    player.yaw = isFiniteNumber(d.yaw) ? d.yaw : -Math.PI / 2;
+    player.pitch = isFiniteNumber(d.pitch)
+      ? clamp(d.pitch, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01)
+      : -0.1;
+    player.health = isFiniteNumber(d.health) ? clamp(d.health, 0, 20) : 20;
+    player.hunger = isFiniteNumber(d.hunger) ? clamp(d.hunger, 0, 20) : 20;
     player.mode = d.mode === 'creative' ? 'creative' : 'survival';
     player.flying = false;
+    player.deadT = 0;
     player.vx = player.vy = player.vz = 0;
     inv.clear();
-    if (Array.isArray(d.inv)) d.inv.forEach(([id, n]) => { if ((isBlock(id) || id === APPLE) && n > 0) inv.set(id, n); });
-    if (Array.isArray(d.hotbar) && d.hotbar.length === 9) hotbar = d.hotbar.map(id => (isBlock(id) || id === APPLE) ? id : null);
-    if (d.spawn && Number.isFinite(d.spawn.x)) {
-      spawn.x = d.spawn.x; spawn.y = d.spawn.y; spawn.z = d.spawn.z;
+    if (Array.isArray(d.inv)) {
+      for (const entry of d.inv) {
+        if (!Array.isArray(entry) || entry.length !== 2) continue;
+        const [id, n] = entry;
+        if ((isBlock(id) || id === APPLE) && isFiniteNumber(n) && n > 0) {
+          inv.set(id, Math.floor(n));
+        }
+      }
     }
-    dayTime = typeof d.time === 'number' ? d.time : 0.25;
-    dayCount = d.day || 1;
+    if (Array.isArray(d.hotbar) && d.hotbar.length === 9) {
+      hotbar = d.hotbar.map(id => ((isBlock(id) || id === APPLE) ? id : null));
+    }
+    if (
+      d.spawn &&
+      isFiniteNumber(d.spawn.x) &&
+      isFiniteNumber(d.spawn.y) &&
+      isFiniteNumber(d.spawn.z)
+    ) {
+      spawn.x = d.spawn.x;
+      spawn.y = d.spawn.y;
+      spawn.z = d.spawn.z;
+    }
+    dayTime = isFiniteNumber(d.time) ? clamp(d.time, 0, 0.999) : 0.25;
+    dayCount = isFiniteNumber(d.day) ? Math.max(1, Math.floor(d.day)) : 1;
+    ensurePlayerSafe();
     return true;
   } catch (e) { console.error(e); return false; }
 }
@@ -1316,6 +1374,8 @@ function loop(t) {
     updateSky(dt);
     updateCamera();
     updateClock();
+    saveAcc += dt;
+    if (saveAcc >= 30) { saveAcc = 0; saveGame(); }
   }
   if (started) renderer.render(scene, camera);
   requestAnimationFrame(loop);
@@ -1327,6 +1387,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
 });
 window.addEventListener('beforeunload', saveGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 
 /* ── game start / title ──────────────────────────────────── */
 function showTitle() {
@@ -1339,7 +1400,9 @@ function showTitle() {
   pauseEl.classList.add('hidden');
   invPanel.classList.add('hidden');
   const btn = document.getElementById('btn-play');
-  btn.textContent = localStorage.getItem(worldKey) ? 'Продолжить' : 'Играть';
+  let hasSave = false;
+  try { hasSave = !!localStorage.getItem(worldKey); } catch (e) {}
+  btn.textContent = hasSave ? 'Продолжить' : 'Играть';
 }
 
 function hideTitle() {
@@ -1389,6 +1452,7 @@ function beginGame(newWorld, mode) {
         paused = false;
         lockEl.classList.add('hidden');
         pauseEl.classList.add('hidden');
+        quickplay = false;
       } else {
         paused = true;
         lockEl.classList.remove('hidden');

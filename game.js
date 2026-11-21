@@ -682,6 +682,15 @@ const WALL_TEX = (() => {
 /* ── world ───────────────────────────────────────────────── */
 const W = 320, H = 128, TILE = 40;
 const SAVE_KEY = 'avirbeta_save_v2';
+
+function hasSave() {
+  try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; }
+}
+
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 const DAY_LENGTH = 480;
 const REACH = 5.5;
 
@@ -1595,7 +1604,10 @@ function refreshInventory() {
 }
 
 document.getElementById('resume').addEventListener('click', () => setPaused(false));
-document.getElementById('save').addEventListener('click', () => { saveGame(); toast('Мир сохранён'); });
+document.getElementById('save').addEventListener('click', () => {
+  if (saveGame()) toast('Мир сохранён');
+  else toast('Не удалось сохранить: хранилище переполнено');
+});
 document.getElementById('newworld').addEventListener('click', () => {
   saveGame();
   openNewWorld('pause');
@@ -1780,7 +1792,7 @@ function showTitle() {
   aboutPanel.classList.add('hidden');
   titleEl.classList.remove('hidden');
   hudEl.classList.add('hidden');
-  btnPlay.textContent = localStorage.getItem(SAVE_KEY) ? 'Продолжить' : 'Играть';
+  btnPlay.textContent = hasSave() ? 'Продолжить' : 'Играть';
   splashEl.textContent = SPLASHES[(Math.random() * SPLASHES.length) | 0];
   mouse.left = mouse.right = false;
 }
@@ -2035,8 +2047,8 @@ document.getElementById('fullscreen').addEventListener('click', () => {
 });
 document.getElementById('reset-save').addEventListener('click', () => {
   if (!confirm('Удалить сохранение мира?')) return;
-  localStorage.removeItem(SAVE_KEY);
-  btnPlay.textContent = 'Играть';
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { console.warn('reset failed', e); }
+  btnPlay.textContent = hasSave() ? 'Продолжить' : 'Играть';
   toast('Сохранение удалено');
 });
 
@@ -2744,8 +2756,10 @@ function saveGame() {
       dayTime, dayCount
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    return true;
   } catch (e) {
     console.warn('save failed', e);
+    return false;
   }
 }
 
@@ -2772,9 +2786,18 @@ function loadGame() {
         if (worldOk) {
           world = w;
           surfaceArr = new Int16Array(W);
-          if (Array.isArray(d.surface) && d.surface.length === W) {
-            for (let x = 0; x < W; x++) surfaceArr[x] = d.surface[x];
-          } else {
+          let surfaceOk = Array.isArray(d.surface) && d.surface.length === W;
+          if (surfaceOk) {
+            for (let x = 0; x < W; x++) {
+              const value = d.surface[x];
+              if (!isFiniteNumber(value) || value < 0 || value >= H) {
+                surfaceOk = false;
+                break;
+              }
+              surfaceArr[x] = Math.round(value);
+            }
+          }
+          if (!surfaceOk) {
             for (let x = 0; x < W; x++) {
               let y = 0;
               while (y < H && world[idx(x, y)] === AIR) y++;
@@ -2783,31 +2806,61 @@ function loadGame() {
           }
           biomeArr = new Uint8Array(W);
           if (Array.isArray(d.biome) && d.biome.length === W) {
-            for (let x = 0; x < W; x++) biomeArr[x] = d.biome[x];
+            for (let x = 0; x < W; x++) {
+              const value = d.biome[x];
+              biomeArr[x] = (
+                isFiniteNumber(value) && value >= BIOME_PLAINS && value <= BIOME_MOUNTAIN
+              ) ? value : BIOME_PLAINS;
+            }
           }
-          seed = d.seed || 1;
-          player.x = d.px;
-          player.y = d.py;
-          player.hp = clamp(d.hp ?? 20, 0, 20);
-          player.hunger = clamp(d.hunger ?? 20, 0, 20);
+          seed = isFiniteNumber(d.seed) ? (d.seed >>> 0) : 1;
+          player.x = isFiniteNumber(d.px) ? d.px : W / 2;
+          player.y = isFiniteNumber(d.py) ? d.py : 40;
+          player.hp = isFiniteNumber(d.hp) ? clamp(d.hp, 0, 20) : 20;
+          player.hunger = isFiniteNumber(d.hunger) ? clamp(d.hunger, 0, 20) : 20;
           player.mode = d.mode === 'creative' ? 'creative' : 'survival';
-          worldDifficulty = d.difficulty || 'normal';
           player.dead = false;
           player.flying = false;
           player.vx = player.vy = 0;
+          player.jumpHeld = false;
+          player.invuln = 0;
           toolDur.clear();
-          if (Array.isArray(d.toolDur)) d.toolDur.forEach(([id, dur]) => { if (ITEMS[id] && ITEMS[id].tool) toolDur.set(id, dur); });
+          if (Array.isArray(d.toolDur)) {
+            for (const entry of d.toolDur) {
+              if (!Array.isArray(entry) || entry.length !== 2) continue;
+              const [id, dur] = entry;
+              if (ITEMS[id] && ITEMS[id].tool && isFiniteNumber(dur) && dur > 0) {
+                toolDur.set(id, dur);
+              }
+            }
+          }
           chests.clear();
           if (Array.isArray(d.chests)) {
-            for (const [k, arr] of d.chests) if (Array.isArray(arr) && arr.length === 9) chests.set(k, arr);
+            for (const entry of d.chests) {
+              if (!Array.isArray(entry) || entry.length !== 2) continue;
+              const [key, arr] = entry;
+              if (typeof key !== 'string' || !Array.isArray(arr) || arr.length !== 9) continue;
+              chests.set(key, arr.map(id => (id && ITEMS[id] ? id : null)));
+            }
           }
           inv.clear();
-          if (Array.isArray(d.inv)) d.inv.forEach(([id, n]) => { if (id && ITEMS[id] && n > 0) inv.set(id, n); });
+          if (Array.isArray(d.inv)) {
+            for (const entry of d.inv) {
+              if (!Array.isArray(entry) || entry.length !== 2) continue;
+              const [id, n] = entry;
+              if (id && ITEMS[id] && isFiniteNumber(n) && n > 0) {
+                inv.set(id, Math.floor(n));
+              }
+            }
+          }
           if (Array.isArray(d.hotbar) && d.hotbar.length === 9) {
             hotbar = d.hotbar.map(id => (id && ITEMS[id] ? id : null));
           }
-          dayTime = typeof d.dayTime === 'number' ? d.dayTime : 0.22;
-          dayCount = d.dayCount || 1;
+          worldDifficulty = (
+            d.difficulty === 'peaceful' || d.difficulty === 'hard'
+          ) ? d.difficulty : 'normal';
+          dayTime = isFiniteNumber(d.dayTime) ? clamp(d.dayTime, 0, 0.999) : 0.22;
+          dayCount = isFiniteNumber(d.dayCount) ? Math.max(1, Math.floor(d.dayCount)) : 1;
           spawnX = Math.floor(W / 2) + 0.15;
           spawnY = surfaceArr[Math.floor(W / 2)] - 1.8;
           computeLight();
